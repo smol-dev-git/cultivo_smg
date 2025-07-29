@@ -1,0 +1,29 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "C:\\Users\\santy\\esp\\v5.4.1\\esp-idf",
+  "idf.toolsPathWin": "C:\\espressif\\.espressif",
+  "idf.pythonInstallPath": "C:\\espressif\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.portWin": "COM3",
+  "idf.customExtraVars": {
+    "OPENOCD_SCRIPTS": "C:\\espressif\\.espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20230419/openocd-esp32/share/openocd/scripts",
+    "IDF_CCACHE_ENABLE": "1",
+    "ESP_ROM_ELF_DIR": "C:\\espressif\\.espressif\\tools\\esp-rom-elfs\\20230320/",
+    "IDF_TARGET": "esp32"
+  },
+  "idf.openOcdConfigs": [
+    "interface/ftdi/esp32_devkitj_v1.cfg",
+    "target/esp32.cfg"
+  ],
+  "idf.flashType": "UART",
+  "files.associations": {
+    "stdbool.h": "c",
+    "gpio.h": "c",
+    "gpio_etm.h": "c",
+    "esp_rom_gpio.h": "c",
+    "inttypes.h": "c",
+    "main_cultivo.h": "c",
+    "adc_types.h": "c",
+    "string.h": "c",
+    "stdlib.h": "c"
+  }
+}
