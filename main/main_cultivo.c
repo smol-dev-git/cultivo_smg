@@ -46,6 +46,8 @@ bool flag_secs_atendido = false; //Flag de atención de los sensores cada N segu
 
 bool flag_print_sec = false; //Dbeug secs print
 
+bool flag_error_i2c = false;
+
 stru_lec_sensores_t lecturas;  //Estructura que almacena los valores leídos
 stru_umbrales_var_t umbrales_actuadores;
 bool array_accion_actuadores[pos_actuadores_tamaño] = {false}; //Array [0,0,0,0] que contiene los estados de los actuadores
@@ -68,7 +70,12 @@ void config_inicial(void){
     gpio_set_direction(PIN_FERTILIZAR, GPIO_MODE_OUTPUT); //P32
     
     //--- Inicialización I2C, bus y esclavo SHT30
-    i2c_master_init();
+   esp_err_t ret = i2c_master_init();
+   if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al inciar la comunicacion I2C: %s", esp_err_to_name(ret)); 
+        flag_error_i2c = true;
+    } 
+
     adc_init();
 
     //Set Umbrales para iniciar operaciones
@@ -236,7 +243,16 @@ stru_lec_sensores_t  sensores(void){
         estado_luz = !estado_luz;
         actuar_fertilizar(estado_luz);
         //DEBUG
-        ESP_ERROR_CHECK(i2c_read_sht(&lecturas_sht30)); //Reemplazar por funcion no bloqueante
+        if (!flag_error_i2c){
+            //ESP_ERROR_CHECK(i2c_read_sht(&lecturas_sht30)); //Reemplazar por funcion no bloqueante
+            esp_err_t ret = i2c_read_sht(&lecturas_sht30);
+            if(ret != ESP_OK){
+                ESP_LOGE(TAG, "Error al leer humedad ambiental en SHT30: %s", esp_err_to_name(ret)); 
+                lecturas.humedad_int = 0;
+                lecturas.temperatura = 0;
+            } 
+        }
+        
         humedad_suelo_lectura(&lectura_adc);
     
         //Si se leyó satisfactoriamente
@@ -246,16 +262,18 @@ stru_lec_sensores_t  sensores(void){
 
         //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:%f - Hum_int: %f - Temp: %f - Caudal: %s", lecturas.humedad_ext, lecturas.humedad_int, lecturas.temperatura, lecturas.presencia_caudal ? "true" : "false"  );
         //ESP_LOGI(TAG_ACTUADORES, "ACCION ACTUADORES ----> Iluminar:%s - Ventilar:%s - Regar:%s, Fertilizar:%s", array_accion_actuadores[pos_array_ILUMINAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_FERTILIZAR] ? "ON" : "OFF");
+       
         
-
+        //------LECTURA HUMEDAD SUELO CADA 10S
     }else if(sistema_segundos%10 == 0 && flag_secs_10 == false){
         flag_secs_atendido = true; //FLag sensores leídos
-        ESP_LOGI(TAG, "LECTURA ADC_1_P35 HUM SUELO ------->");
+        ESP_LOGI(TAG, "LECTURA ADC_1_Pin35 HUM SUELO ------->");
         humedad_suelo_lectura(&lectura_adc);
 
     }else if( sistema_segundos == 00 &&  flag_secs_atendido == true){ //Reset de Flag de atención en segundo siguiente
         flag_secs_atendido = false;
-        ESP_LOGI(TAG, "LECTURA SHT30 I2C ------->");
+        ESP_LOGW(TAG, "DEBUG Lectura?");
+        ESP_LOGI(TAG, "LECTURA SHT30 I2C??? ------->");
         ESP_ERROR_CHECK(i2c_read_sht(&lecturas_sht30));
 
         //DEBUG SMOL-----------
@@ -290,7 +308,6 @@ void actuar_ventilar(bool estado_act){
     ESP_LOGI(TAG_ACTUADORES, "Ventilar: %s", estado_act ? "ON" : "OFF");
 
 }
-
 void actuar_iluminar(bool estado_act){
     
     gpio_set_level(PIN_ILUMINAR, estado_act ? 0 : 1);
@@ -303,13 +320,37 @@ void actuar_regar(bool estado_act){
     ESP_LOGI(TAG_ACTUADORES, "Regar: %s", estado_act ? "ON" : "OFF");
 
 }
-
 void actuar_fertilizar(bool estado_act){
     
+    ESP_LOGW(TAG_ACTUADORES, "INICIANDO FERTILIZACION....");
+    actuar_regar(true);
+
+
+    //Comprobación estado bomba de riego para ferttilizar
+    ESP_LOGI(TAG_ACTUADORES, "Verificando bomba de riego...");
+    if (!gpio_get_level(PIN_REGAR)){
+        ESP_LOGW(TAG_ACTUADORES, "Riego no activo, Imposible efectuar fertilizacion");
+        return;
+    }else if(!sensor_caudal_riego()){
+        ESP_LOGW(TAG_ACTUADORES, "Problemas en caudal de riego, Imposible efectuar fertilizacion");
+        return;
+    }
+
+
     gpio_set_level(PIN_FERTILIZAR, estado_act ? 0 : 1);
     ESP_LOGI(TAG_ACTUADORES, "Fertilizar: %s", estado_act ? "ON" : "OFF");
    
 
+}
+
+/*Funcion que mide la presencia de caudal de riego;
+ Lectura en 0 Pin de sensado = sin Flujo  | 1 = Flujo detectado
+ */
+bool sensor_caudal_riego(void){
+    if (!gpio_get_level(PIN_SENSOR_RIEGO)){
+        ESP_LOGW(TAG_ACTUADORES, "Problemas en caudal de riego, Imposible efectuar fertilizacion");
+        return 0;
+    }else return 1;
 }
 
 void chipinfo(void){

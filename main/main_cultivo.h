@@ -5,6 +5,8 @@
 #define PIN_ILUMINAR 26
 #define PIN_REGAR 27  
 #define PIN_FERTILIZAR 32 
+#define PIN_SENSOR_RIEGO 14
+
 
 
 
@@ -18,6 +20,7 @@ void chipinfo(void); //Información del chip
 
 void config_inicial(void);
 void actuadores(void); 
+bool sensor_caudal_riego(void);
 
 esp_err_t humedad_suelo_lectura(float *hum_suelo); //Lectura de la humedad del suelo
 void set_umbrales_actuadores(void); //Set de umbrales param el inicio y tras solicitud del usuario por GUI
