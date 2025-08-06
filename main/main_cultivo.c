@@ -48,7 +48,7 @@ bool flag_print_sec = false; //Dbeug secs print
 
 bool flag_error_i2c = false;
 
-stru_lec_sensores_t lecturas;  //Estructura que almacena los valores leídos
+stru_lec_sensores_t lecturas;  //Estructura general que almacena los valores leídos
 stru_umbrales_var_t umbrales_actuadores;
 bool array_accion_actuadores[pos_actuadores_tamaño] = {false}; //Array [0,0,0,0] que contiene los estados de los actuadores
 sht30_data_t lecturas_sht30;
@@ -243,6 +243,8 @@ stru_lec_sensores_t  sensores(void){
         estado_luz = !estado_luz;
         actuar_fertilizar(estado_luz);
         //DEBUG
+
+        //------ LECTURA sensor humedad y temperatura ambiental
         if (!flag_error_i2c){
             //ESP_ERROR_CHECK(i2c_read_sht(&lecturas_sht30)); //Reemplazar por funcion no bloqueante
             esp_err_t ret = i2c_read_sht(&lecturas_sht30);
@@ -250,17 +252,43 @@ stru_lec_sensores_t  sensores(void){
                 ESP_LOGE(TAG, "Error al leer humedad ambiental en SHT30: %s", esp_err_to_name(ret)); 
                 lecturas.humedad_int = 0;
                 lecturas.temperatura = 0;
-            } 
+            }else{ //Si hay lectura satisfactoria se guardan los valores
+               
+                //Verificacion de valor correcto Temperatura
+                if (lecturas_sht30.temperature >= 10.0 && lecturas_sht30.temperature <= 40.0)
+                {
+                    lecturas_sht30.temperature = lecturas.temperatura;      
+                }else{
+                  ESP_LOGE(TAG, "Error Lectura SHT30 -temperatura fuera de rango -");
+                  lecturas.temperatura = -0.1;
+                } 
+                
+                //Vericiacion de valor correcto Humedad ambiental
+                if (lecturas_sht30.humidity >= LIM_HUM_AMB_MIN && lecturas_sht30.humidity <= LIM_HUM_AMB_MAX)
+                {
+                    lecturas_sht30.humidity = lecturas.humedad_int;      
+                }else{
+                  ESP_LOGE(TAG, "Error Lectura SHT30 -Humedad relativa fuera de rango-");
+                  lecturas.temperatura = -0.1;
+                    
+                } 
+            }
         }
         
+        //------ LECTURA sensor humedad suelo.
         humedad_suelo_lectura(&lectura_adc);
-    
-        //Si se leyó satisfactoriamente
-        //if (ret == ESP_OK){}
-        lecturas_sht30.humidity = lecturas.humedad_int;
-        lecturas_sht30.temperature = lecturas.temperatura;
 
+        //Verificacion de valor correcot humedad del suelo
+        if (lectura_adc >= 0.2 && lectura_adc <= 3.3 )
+                {
+                    lectura_adc = lecturas.humedad_suelo;      
+                }else{
+                  ESP_LOGE(TAG, "Error Lectura ADC - Humedad del suelo fuera de rango -");
+                  lecturas.humedad_suelo = -0.1;
+                } 
+    
         //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:%f - Hum_int: %f - Temp: %f - Caudal: %s", lecturas.humedad_ext, lecturas.humedad_int, lecturas.temperatura, lecturas.presencia_caudal ? "true" : "false"  );
+        ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:off - Hum_int: %f - Temp: %f - Hum-Suelo: %f  Caudal: %s", lecturas.humedad_int, lecturas.temperatura, lecturas.humedad_suelo, lecturas.presencia_caudal ? "true" : "false"  );
         //ESP_LOGI(TAG_ACTUADORES, "ACCION ACTUADORES ----> Iluminar:%s - Ventilar:%s - Regar:%s, Fertilizar:%s", array_accion_actuadores[pos_array_ILUMINAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_FERTILIZAR] ? "ON" : "OFF");
        
         

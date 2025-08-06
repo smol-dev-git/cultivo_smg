@@ -1,6 +1,7 @@
 #ifndef MAIN_CULTIVO_H
 #define MAIN_CULTIVO_H
 
+//Definicion Pines
 #define PIN_VENTILAR 25 
 #define PIN_ILUMINAR 26
 #define PIN_REGAR 27  
@@ -8,7 +9,14 @@
 #define PIN_SENSOR_RIEGO 14
 
 
+//Definición de límites
 
+#define LIM_HUM_AMB_MAX 100.0
+#define LIM_HUM_AMB_MIN 30.0
+#define LIM_TEMP_MAX 40.0
+#define LIM_TEMP_MIN 10.0 
+#define LIM_HUM_SUELO_MAX 0
+#define LIM_HUM_SUELO_MIN 0
 
 
 //Funciones de actuadores
