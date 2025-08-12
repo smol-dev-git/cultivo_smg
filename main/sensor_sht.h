@@ -8,8 +8,8 @@
 Estructura para almacenar los datos del sensor SHT30
  */
 typedef struct {
-    float temperature; // Temperatura en grados Celsius
-    float humidity;    // Humedad relativa en porcentaje
+    float temperatura; // Temperatura en grados Celsius
+    float humedad;    // Humedad relativa en porcentaje
 } sht30_data_t;
 
 

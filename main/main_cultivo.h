@@ -6,7 +6,7 @@
 #define PIN_ILUMINAR 26
 #define PIN_REGAR 27  
 #define PIN_FERTILIZAR 32 
-#define PIN_SENSOR_RIEGO 14
+#define PIN_SENSOR_CAUDAL 14
 
 
 //Definición de límites
@@ -18,17 +18,20 @@
 #define LIM_HUM_SUELO_MAX 0
 #define LIM_HUM_SUELO_MIN 0
 
+//Variables globales
+
+extern bool flag_error_i2c; //Variable para detección de erro en comunicación I2C con el sensor SHT30
+
 
 //Funciones de actuadores
 void actuar_iluminar(bool); //Activador Iluminación
 void actuar_ventilar(bool); //Activador Ventilación
-void actuar_regar(bool);    //Activador Bomba de Riego
-void actuar_fertilizar(bool); //Activador bomba fertilizante
+void actuar_regar();    //Funcion actuadora bomba de riego Pin27
+void actuar_fertilizar(); //Funcion actuadora bomba fertilizante Pin32
 void chipinfo(void); //Información del chip
 
 void config_inicial(void);
 void actuadores(void); 
-bool sensor_caudal_riego(void);
 
 esp_err_t humedad_suelo_lectura(float *hum_suelo); //Lectura de la humedad del suelo
 void set_umbrales_actuadores(void); //Set de umbrales param el inicio y tras solicitud del usuario por GUI
@@ -44,7 +47,7 @@ typedef struct {        //Prototipo de Estructura de lecturas de sensores
     bool presencia_caudal;
 } stru_lec_sensores_t;
 
-typedef struct {        //Prototipo de Estructura de lecturas de sensores
+typedef struct {        //Prototipo de Estructura de Umbrales de variables
     float umb_hum_suelo;
     float umb_hum_interna_mayor;
     float umb_temp;

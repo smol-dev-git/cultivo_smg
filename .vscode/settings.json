@@ -24,6 +24,7 @@
     "main_cultivo.h": "c",
     "adc_types.h": "c",
     "string.h": "c",
-    "stdlib.h": "c"
+    "stdlib.h": "c",
+    "i2c_master.h": "c"
   }
 }

@@ -22,7 +22,7 @@
 static i2c_master_dev_handle_t master_i2c_manejador = NULL;
 static i2c_master_bus_handle_t bus_manejador = NULL;
 
-static const char *TAG = "I2C_smol";
+static const char *TAG = "I2C_SHT30_smol";
 uint8_t i2c_data_buffer[6]; //Buffer de i2c, array de [6]
 size_t i2c_bytes_read = 6;  //Cantidad de bytes a leer 
 
@@ -62,8 +62,12 @@ esp_err_t i2c_master_init(void){
 //esp_err_t i2c_read_sht(float *temp_sht, float *hum_sht){
 esp_err_t i2c_read_sht(sht30_data_t *sht30_data){
 
+    float conver_temp=0.0;
+    float conver_hum=0.0;
+
     if (master_i2c_manejador == NULL) {
         ESP_LOGE(TAG, "El dispositivo SHT30 no está inicializado.");
+        flag_error_i2c = true;
         return ESP_FAIL;
     }
 
@@ -72,21 +76,26 @@ esp_err_t i2c_read_sht(sht30_data_t *sht30_data){
     write_buffer_sht[1] = SHT30_READ & 0xFF; //Byte menos significativo  -0x0B-
 
     //---Transmisión de datos I2C, se solicita medida---
-    //esp_err_t i2c_master_transmit(i2c_master_dev_handle_t i2c_dev, const uint8_t *write_buffer, size_t write_size, int xfer_timeout_ms)
-    ESP_ERROR_CHECK(i2c_master_transmit(master_i2c_manejador, write_buffer_sht, sizeof(write_buffer_sht), I2C_TIMEOUT_MS));
+    esp_err_t ret = i2c_master_transmit(master_i2c_manejador, write_buffer_sht, sizeof(write_buffer_sht), I2C_TIMEOUT_MS);
+    //ESP_ERROR_CHECK(i2c_master_transmit(master_i2c_manejador, write_buffer_sht, sizeof(write_buffer_sht), I2C_TIMEOUT_MS)); // Antigua función bloqueante.
+     if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al transmitir datos a SHT30: %s", esp_err_to_name(ret));
+        flag_error_i2c = true;
+        return ret;
+    }
 
-    //Comporbación de error de envío
+    //Comprobación de error de envío
     vTaskDelay(200 / portTICK_PERIOD_MS);
     //vTaskDelay(pdMS_TO_TICKS(15));
     
     //----Lectura de valores retornados----
     //Lectura de i2c con tiempo de espera indefinido
     //ESP_ERROR_CHECK(i2c_master_receive(dispo_i2c_manejador, *i2c_data_buffer, i2c_bytes_read, -1));//-1 indica espera indefinida
-
     uint8_t data[6]; // 6 bytes: 2 temp + CRC, 2 hum + CRC
-    esp_err_t ret = i2c_master_receive(master_i2c_manejador, data, sizeof(data), I2C_TIMEOUT_MS);
+    ret = i2c_master_receive(master_i2c_manejador, data, sizeof(data), I2C_TIMEOUT_MS);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Error al leer datos SHT30: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Error al recibir datos SHT30: %s", esp_err_to_name(ret));
+        flag_error_i2c = true;
         return ret;
     }
 
@@ -95,10 +104,38 @@ esp_err_t i2c_read_sht(sht30_data_t *sht30_data){
     uint16_t raw_hum = (data[3] << 8) | data[4];
 
     // Cálculo de temperatura: (valor_sensor / 65535.0) * 175.0 - 45.0
-    sht30_data->temperature = (float)raw_temp * 175.0f / 65535.0f - 45.0f;
-
+    conver_temp = (float)raw_temp * 175.0f / 65535.0f - 45.0f;
+    
     // Cálculo de humedad: (valor_sensor / 65535.0) * 100.0
-    sht30_data->humidity = (float)raw_hum * 100.0f / 65535.0f;
-    ESP_LOGI(TAG, "---- LECTURA SHT30 - HUM: %f  TEMP: %f", sht30_data->humidity, sht30_data->temperature);
+    conver_hum = (float)raw_hum * 100.0f / 65535.0f;
+    
+    //sht30_data->temperatura = (float)raw_temp * 175.0f / 65535.0f - 45.0f;
+    //sht30_data->humedad = (float)raw_hum * 100.0f / 65535.0f;
+
+    ESP_LOGI(TAG, "---- LECTURA SHT30 - HUM: %f  TEMP: %f", conver_hum, conver_temp);
+
+    //Comprobación de valores
+    if(conver_temp >= 10.0 && conver_temp <= 40.0){
+        ESP_LOGI(TAG, "Lectura OK SHT30 - Temperatura");
+        sht30_data->temperatura = conver_temp;
+        flag_error_i2c = false;
+    }else{
+        ESP_LOGW(TAG, "Error Lectura SHT30 -temperatura fuera de rango -");
+        sht30_data->temperatura = -0.1;
+        flag_error_i2c = false;
+    } 
+        
+        //Vericiacion de valor correcto Humedad ambiental
+    if (conver_hum >= LIM_HUM_AMB_MIN && conver_hum <= LIM_HUM_AMB_MAX)
+    {
+        ESP_LOGI(TAG, "Lectura OK SHT30 - Humedad ambiental");     
+        sht30_data->humedad= conver_hum;
+        flag_error_i2c = false;
+    }else{
+        ESP_LOGW(TAG, "Error Lectura SHT30 -Humedad relativa fuera de rango-");
+        sht30_data->humedad = -0.1;
+        flag_error_i2c = true;
+        
+    }   
     return ESP_OK;
 }
