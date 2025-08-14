@@ -36,7 +36,7 @@ static const char *TAG_DEBUG = "DEBUG-";
 static const char *TAG_SENSORES = "SENSO-";
 
 
-
+static TimerHandle_t timer_manejador;
 
 int humedad_ambiente_int = 0;
 int humedad_ambiente_ext = 0;
@@ -46,9 +46,6 @@ bool estado_caudal = false;
 bool estado_ventilar = false;
 bool estado_luz;
 
-bool flag_secs_atendido = false; //Flag de atención de los sensores cada N segundos.
-bool flag_print_sec = false; //Dbeug secs print
-bool flag_secs_10 = false; //Flag de 10s, reset de valor cada 5s
 bool flag_error_i2c = false; //Error en inicialización recursos i2c_master_init()
 
 stru_lec_sensores_t lecturas;  //Estructura general que almacena los valores leídos
@@ -59,6 +56,12 @@ sht30_data_t lecturas_sht30;
 static adc_oneshot_unit_handle_t adc1_handle; //Manejador del canal ADC
 static int adc_raw[10];
 float lectura_adc; // Variable para almacenar lectura de función del ADC
+
+TaskHandle_t tareaprincipal_manejador;
+
+time_t hora_sistema_sensores; // variable para almacenar la hora del sistema
+char strftime_buf[64]; //Conversión de hora de sistema
+struct tm timeinfo; //Hora del sistema estructura de tiempo
 
 
 //-- Configuraciones iniciales
@@ -84,31 +87,6 @@ void config_inicial(void){
 
     //Set Umbrales para iniciar operaciones
     set_umbrales_actuadores();
-
-    
-    /*
-    i2c_master_bus_config_t i2c_master_config = {
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .i2c_port = I2C_PORT_NUM_0,
-        .scl_io_num = I2C_MASTER_SCL_ELPIN,
-        .sda_io_num = I2C_MASTER_SDA_ELPIN,
-        .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = true,
-    };
-    
-    //Bus I2c con configuración.
-    i2c_master_bus_handle_t bus_manejador; 
-    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_master_config, &bus_manejador));
-    
-    //---I2C Master config dispositivo
-    i2c_device_config_t i2c_dispo_config = {
-        .dev_addr_length = I2C_ADDR_BIT_7,
-        .device_address = 0x58,
-        .scl_speed_hz = 100000,
-    };
-    */
-    
-    estado_luz = false;
 }
 
 //Inicialización del ADC
@@ -151,22 +129,53 @@ void set_umbrales_actuadores(void){
 }
 
 
+void tarea_principal(){
+    u_int8_t count = 0;
+    while(1){
+        //Espera de notificación de timer
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        tiempo_sistema();
+        count ++;
+        if(count == 3){
+            count = 0;
+            sensores();
+            actuadores();
+        }
+        //vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+}
+
+
+
 void app_main(void)
 {
     printf("--- MODULO ASISTENTE DE CULTIVO ---\n");
     printf("-Iniciando placa ESP32...-\n\n\n");
     config_inicial();
+
+    xTaskCreate(tarea_principal, "main_task", 2048, NULL, 1, &tareaprincipal_manejador);
+
+    timer_manejador = xTimerCreate("Timer_Smol", 5*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
+    
+    if (timer_manejador == NULL)
+    {
+        ESP_LOGE("Timer_Smol", "Error Grave iniciando timer del sistema para tiempo");
+    }
+    xTimerStart(timer_manejador, 0);
+
     while (true)
     {
-    //checkTimeSens();    //Posible función de comprobación de tiempo.
-    sensores(); //si el tiempo coincide, se muestrean los sensores
-    vTaskDelay(200 / portTICK_PERIOD_MS);
-    actuadores();
-    /* code */
+        //CENTRO TAREA MAIN -ESPERA INFINITA-
+        vTaskDelay(portMAX_DELAY);
     }
 
     esp_restart();
-    
+}
+
+void timer_funcion(TimerHandle_t pxTimer){
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    printf("\n\n\n\nTIMER notify from ISR -5s-\n");
+    vTaskNotifyGiveFromISR(tareaprincipal_manejador, &xHigherPriorityTaskWoken); //Cambio de contexto tarea prioritaria
 }
 
 
@@ -182,6 +191,19 @@ void actuadores(void){
     lecturas.humedad_suelo = 0;
     */
 
+    //DEBUG ----- Prueba Fertilización sin activar  riego
+    //ESP_LOGW(TAG_DEBUG, "Ingresando a actuar_fertilizar() error esperado "); 
+    //array_accion_actuadores[pos_array_FERTILIZAR] = true;
+    //actuar_fertilizar(array_accion_actuadores[pos_array_FERTILIZAR]);
+    //DEBUG
+
+
+    //DEBUG ----- Prueba Fertilización activando riego
+    //ESP_LOGW(TAG_DEBUG, "Ingresando a actuar_fertilizar Riego esperado.");
+    //array_accion_actuadores[pos_array_REGAR] = true;
+    //actuar_regar();
+    //actuar_fertilizar();
+    //DEBUG
 
     //------- MODO AUTOMÁTICO -----------//
     if (modo_Auto_ON == true){    
@@ -213,111 +235,60 @@ void actuadores(void){
 //-Factorizar casos de error para mejor visualización y manejo
 //-Logs de lecturas SHT, factorizar hacia dentro de funciòno SHT,no dejar en sensores()
 //-- Obtebnción de hora del sistema y Lectura de sensores cada N segundos
-stru_lec_sensores_t  sensores(void){
-    esp_err_t ret = ESP_OK;
 
-    //------------------ Hora del sistema ------------------
-    time_t hora_sistema_sensores; // variable para almacenar la hora que se comparará para lectura sensores
-    char strftime_buf[64];
-    struct tm timeinfo;
+
+
+void tiempo_sistema(){
     time(&hora_sistema_sensores); //Captura de hora POSIX del sistema
     setenv("TZ", "COT-5", 1); // Set zona horaria
     tzset();
     localtime_r(&hora_sistema_sensores, &timeinfo);
     int sistema_segundos = timeinfo.tm_sec; //Tiempo del sistema en segundos
-    
+    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); //print tiempo  a cadena de texto 
+    ESP_LOGI(TAG, "Hora Sistema: %s   -SECS- :  %d", strftime_buf, sistema_segundos);
+}
 
-    //print tiempo cada 5 secs
-    if(sistema_segundos%5 == 0 && flag_print_sec == false){
-        flag_print_sec = true;
-        flag_secs_10 = false;
-        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); // a cadena de texto 
-        ESP_LOGI(TAG, "Hora Sistema: %s   -SECS- :  %d", strftime_buf, sistema_segundos);
-    }else if(flag_print_sec == true && sistema_segundos%5 != 0) flag_print_sec = false;
-    
+stru_lec_sensores_t  sensores(void){
+    esp_err_t ret = ESP_OK;
 
-    //------------------ LECTURA SENSORES CUANDO 30 SEGUNDOS ------------------
-    //TODO: Reemplazara ESP_ERROR_CHECK por no bloqueante
-    if (sistema_segundos == 30 && flag_secs_atendido == false) //-----Lectura de sensores cada minuto
-    {
-        flag_secs_atendido = true; //FLag sensores leídos
-        lecturas.humedad_ext = 0;
-        lecturas.humedad_int = 0;
-        lecturas.temperatura = 0;
-        lecturas.presencia_caudal = 0;
-        lecturas.humedad_suelo = 0;
+    lecturas.humedad_ext = 0;
+    lecturas.humedad_int = 0;
+    lecturas.temperatura = 0;
+    lecturas.presencia_caudal = 0;
+    lecturas.humedad_suelo = 0;
 
-        //DEBUG
-        ESP_LOGW(TAG_DEBUG, "Ingresando a actuar_fertilizar() error esperado...."); 
-        array_accion_actuadores[pos_array_FERTILIZAR] = true;
-        actuar_fertilizar(array_accion_actuadores[pos_array_FERTILIZAR]);
-        //DEBUG
+    //------------------ LECTURA sensor humedad suelo ------------------
+    humedad_suelo_lectura(&lectura_adc);
 
-        //------------------ LECTURA sensor humedad suelo ------------------
-        humedad_suelo_lectura(&lectura_adc);
+    //Verificacion de valor correcot humedad del suelo
+    if (lectura_adc >= 0.2 && lectura_adc <= 3.3 ){
+        lectura_adc = lecturas.humedad_suelo;      
+    }else{
+        ESP_LOGW(TAG, "Error Lectura ADC - Humedad del suelo fuera de rango -");
+        lecturas.humedad_suelo = -0.1;
+    } 
 
-        //Verificacion de valor correcot humedad del suelo
-        if (lectura_adc >= 0.2 && lectura_adc <= 3.3 ){
-            lectura_adc = lecturas.humedad_suelo;      
-        }else{
-            ESP_LOGE(TAG, "Error Lectura ADC - Humedad del suelo fuera de rango -");
-            lecturas.humedad_suelo = -0.1;
-        } 
-
-
-
-        //------------------ LECTURA I2C Sensor SHT30 humedad y temperatura ambiental  ------------------
-        if (flag_error_i2c){
-            ESP_LOGE(TAG_SENSORES, "Error I2C SHT30 - Imposible leer temperatura y humedad ambiental -");
-            lecturas.temperatura = -0.1;
-            lecturas.humedad_int = -0.1;
-            //TODO
-            //Pendiente "Return" o "goto" tras error
-        }
-        //ESP_ERROR_CHECK(i2c_read_sht(&lecturas_sht30)); //Reemplazar por funcion no bloqueante
-        ret = i2c_read_sht(&lecturas_sht30);
-        if(ret == ESP_OK){
-            ESP_LOGI(TAG_SENSORES, "funcion lectura i2c_read_sht() culminada - Se asignan valores de SHT30 - HUM %f   TEMP %f", lecturas.humedad_int, lecturas.temperatura);
-            lecturas.humedad_int = lecturas_sht30.humedad;
-            lecturas.temperatura = lecturas_sht30.temperatura;
-        }else{ //Si hay lectura satisfactoria se guardan los valores
-            ESP_LOGE(TAG_SENSORES, "Error al leer valores SHT30 "); 
-            lecturas.humedad_int = -0.1;
-            lecturas.temperatura = -0.1;
-            return lecturas;
-        }
-
-         //DEBUG
-        ESP_LOGW(TAG_DEBUG, "Ingresando a actuar_fertilizar Riego esperado.");
-        array_accion_actuadores[pos_array_REGAR] = true;
-        actuar_regar();
-        actuar_fertilizar();
-        //DEBUG
-        //------LECTURA HUMEDAD SUELO CADA 10S
-    }else if(sistema_segundos%10 == 0 && flag_secs_10 == false){
-        flag_secs_10 = true; //FLag sensores leídos
-        humedad_suelo_lectura(&lectura_adc);
-
-    }else if( sistema_segundos == 00 &&  flag_secs_atendido == true){ //Reset de Flag de atención en segundo siguiente
-
-        //DEBUG SMOL-----------
-        ESP_LOGW(TAG, "Reset flag flag_secs_atendido");
-        //DEBUG SMOL-----------    
-
-        flag_secs_atendido = false;
-        ret = i2c_read_sht(&lecturas_sht30);
-        if(ret == ESP_OK){
-            ESP_LOGI(TAG_SENSORES, "funcion lectura i2c_read_sht() culminada - Se asignan valores de SHT30 - HUM %f   TEMP %f", lecturas.humedad_int, lecturas.temperatura);
-            lecturas.humedad_int = lecturas_sht30.humedad;
-            lecturas.temperatura = lecturas_sht30.temperatura;
-        }else{ //Si hay lectura satisfactoria se guardan los valores
-            ESP_LOGE(TAG_SENSORES, "Error al leer valores SHT30 "); 
-            lecturas.humedad_int = -0.1;
-            lecturas.temperatura = -0.1;
-            return lecturas;
-        }
-        
+    //------------------ LECTURA I2C Sensor SHT30 humedad y temperatura ambiental  ------------------
+    if (flag_error_i2c){
+        ESP_LOGE(TAG_SENSORES, "Error I2C SHT30 - Imposible leer temperatura y humedad ambiental");
+        lecturas.temperatura = -0.1;
+        lecturas.humedad_int = -0.1;
+        //TODO
+        //Pendiente "Return" o "goto" tras error
     }
+
+    ret = i2c_read_sht(&lecturas_sht30);
+    if(ret == ESP_OK){
+        lecturas.humedad_int = lecturas_sht30.humedad;
+        lecturas.temperatura = lecturas_sht30.temperatura;
+        ESP_LOGI(TAG_SENSORES, "Lectura i2c_read_sht() Ok - Se asignan valores de SHT30 - HUM %f   TEMP %f", lecturas.humedad_int, lecturas.temperatura);
+    }else{
+        ESP_LOGE(TAG_SENSORES, "Error al leer valores SHT30 "); 
+        lecturas.humedad_int = -0.1;
+        lecturas.temperatura = -0.1;
+        return lecturas;
+    }
+     
 
     //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:%f - Hum_int: %f - Temp: %f - Caudal: %s", lecturas.humedad_ext, lecturas.humedad_int, lecturas.temperatura, lecturas.presencia_caudal ? "true" : "false"  );
     //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:off - Hum_int: %f - Temp: %f - Hum-Suelo: %f  Caudal: %s", lecturas.humedad_int, lecturas.temperatura, lecturas.humedad_suelo, lecturas.presencia_caudal ? "true" : "false"  );

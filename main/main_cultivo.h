@@ -1,6 +1,8 @@
 #ifndef MAIN_CULTIVO_H
 #define MAIN_CULTIVO_H
 
+#include "freertos/FreeRTOS.h"
+
 //Definicion Pines
 #define PIN_VENTILAR 25 
 #define PIN_ILUMINAR 26
@@ -22,6 +24,7 @@
 
 extern bool flag_error_i2c; //Variable para detección de erro en comunicación I2C con el sensor SHT30
 
+void timer_funcion(TimerHandle_t);
 
 //Funciones de actuadores
 void actuar_iluminar(bool); //Activador Iluminación
@@ -32,6 +35,8 @@ void chipinfo(void); //Información del chip
 
 void config_inicial(void);
 void actuadores(void); 
+
+void tiempo_sistema();//Cálculo de hora del sistema
 
 esp_err_t humedad_suelo_lectura(float *hum_suelo); //Lectura de la humedad del suelo
 void set_umbrales_actuadores(void); //Set de umbrales param el inicio y tras solicitud del usuario por GUI

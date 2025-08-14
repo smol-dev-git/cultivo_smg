@@ -109,14 +109,11 @@ esp_err_t i2c_read_sht(sht30_data_t *sht30_data){
     // Cálculo de humedad: (valor_sensor / 65535.0) * 100.0
     conver_hum = (float)raw_hum * 100.0f / 65535.0f;
     
-    //sht30_data->temperatura = (float)raw_temp * 175.0f / 65535.0f - 45.0f;
-    //sht30_data->humedad = (float)raw_hum * 100.0f / 65535.0f;
-
-    ESP_LOGI(TAG, "---- LECTURA SHT30 - HUM: %f  TEMP: %f", conver_hum, conver_temp);
+    ESP_LOGI(TAG, "--- RECIBIDO SHT30 -- HUM: %f  TEMP: %f", conver_hum, conver_temp);
 
     //Comprobación de valores
     if(conver_temp >= 10.0 && conver_temp <= 40.0){
-        ESP_LOGI(TAG, "Lectura OK SHT30 - Temperatura");
+        //ESP_LOGI(TAG, "Lectura OK SHT30 - Temperatura");
         sht30_data->temperatura = conver_temp;
         flag_error_i2c = false;
     }else{
@@ -128,7 +125,7 @@ esp_err_t i2c_read_sht(sht30_data_t *sht30_data){
         //Vericiacion de valor correcto Humedad ambiental
     if (conver_hum >= LIM_HUM_AMB_MIN && conver_hum <= LIM_HUM_AMB_MAX)
     {
-        ESP_LOGI(TAG, "Lectura OK SHT30 - Humedad ambiental");     
+        //ESP_LOGI(TAG, "Lectura OK SHT30 - Humedad ambiental");     
         sht30_data->humedad= conver_hum;
         flag_error_i2c = false;
     }else{
