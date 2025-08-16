@@ -55,9 +55,11 @@ sht30_data_t lecturas_sht30;
 
 static adc_oneshot_unit_handle_t adc1_handle; //Manejador del canal ADC
 static int adc_raw[10];
-float lectura_adc; // Variable para almacenar lectura de función del ADC
+int lectura_adc; // Variable para almacenar lectura de función del ADC
 
 TaskHandle_t tareaprincipal_manejador;
+TaskHandle_t tarearegar_manejador;
+TaskHandle_t tareaventilar_manejador;
 
 time_t hora_sistema_sensores; // variable para almacenar la hora del sistema
 char strftime_buf[64]; //Conversión de hora de sistema
@@ -129,17 +131,72 @@ void set_umbrales_actuadores(void){
 }
 
 
+/*Tarea que activa PIN_VENTILAR - 25; y asigan valor a array_accion_actuadores[pos_array_VENTILAR]
+LA función se bloquea a la espera de TaskNotifyWait; siempre se debe actualizar por código, el estado de la posición array anterior a 1.
+La función tiene tiempo de espera con la finalidad de actuar mediante "pulsos" de x tiempo en sus salidas.
+*/
+void tarea_ventilar(){
+    uint32_t valor_notificacion;
+
+    while(1){
+    
+        //Notificacion con espera de tiempo
+        ESP_LOGW("task_ventilar", "TAREA VENTILAR BLOQUEADA---- 20s o Notify");
+        BaseType_t xResult = xTaskNotifyWait(0, ULONG_MAX, &valor_notificacion, pdMS_TO_TICKS( TIEMPO_VENTILAR_ON * 1000));
+        //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        //Paso de bloqueo por notificación, es decir, se quizo activar venitlar por notificación
+         if (xResult == pdTRUE) {
+            gpio_set_level(PIN_VENTILAR, array_accion_actuadores[pos_array_VENTILAR] ? 1 : 0);
+            ESP_LOGW("task_ventilar", "ACTIVACION TAREA_Ventilar VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
+
+         }else{ //Paso de bloqueo por expiración de tiempo
+            array_accion_actuadores[pos_array_VENTILAR] = false;
+            gpio_set_level(PIN_VENTILAR, array_accion_actuadores[pos_array_VENTILAR] ? 1 : 0);
+            ESP_LOGW("task_ventilar", "TIEMPO EXPIRADO EN TAREA_Ventilar VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
+        }
+        
+    }
+}
+
+
+void tarea_regar(){
+    uint32_t valor_notificacion;
+    while(1){
+        //Notificacion con espera de tiempo
+        ESP_LOGW("task_regar", "TAREA REGAR BLOQUEADA---- 20s o Notify");
+        BaseType_t xResult = xTaskNotifyWait(0, ULONG_MAX, &valor_notificacion, pdMS_TO_TICKS( TIEMPO_REGAR_ON * 1000));
+        //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        //Paso de bloqueo por notificación, es decir, se quizo activar venitlar por notificación
+         if (xResult == pdTRUE) {
+            gpio_set_level(PIN_REGAR, array_accion_actuadores[pos_array_REGAR] ? 1 : 0);
+            ESP_LOGW("task_regar", "ACTIVACION TAREA_Ventilar VENTILACION: %s", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF");
+
+         }else{ //Paso de bloqueo por expiración de tiempo
+            array_accion_actuadores[pos_array_REGAR] = false;
+            gpio_set_level(PIN_REGAR, array_accion_actuadores[pos_array_REGAR] ? 1 : 0);
+            ESP_LOGW("task_regar", "TIEMPO EXPIRADO EN TAREA_Regar RIEGO: %s", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF");
+        }
+    }
+}
+
+
 void tarea_principal(){
     u_int8_t count = 0;
+    //BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     while(1){
         //Espera de notificación de timer
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         tiempo_sistema();
         count ++;
         if(count == 3){
+            printf("\n\n\nCONTEO 3 EN TAREA PRINCIPAL, SE EJECUTA LÓGICA\n");
             count = 0;
             sensores();
             actuadores();
+            printf("\n\n\nUNLOCK TAREA  VENTILAR \n");
+            xTaskNotifyGive(tareaventilar_manejador); //Cambio de contexto tarea prioritaria
         }
         //vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
@@ -153,7 +210,10 @@ void app_main(void)
     printf("-Iniciando placa ESP32...-\n\n\n");
     config_inicial();
 
-    xTaskCreate(tarea_principal, "main_task", 2048, NULL, 1, &tareaprincipal_manejador);
+    xTaskCreate(tarea_principal, "main_task", 4096, NULL, 4, &tareaprincipal_manejador);
+    xTaskCreate(tarea_ventilar, "ventilar_task", 2048, NULL, 2, &tareaventilar_manejador);
+    xTaskCreate(tarea_regar, "regar_task", 2048, NULL, 2, &tarearegar_manejador);
+    
 
     timer_manejador = xTimerCreate("Timer_Smol", 5*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
     
@@ -176,6 +236,7 @@ void timer_funcion(TimerHandle_t pxTimer){
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     printf("\n\n\n\nTIMER notify from ISR -5s-\n");
     vTaskNotifyGiveFromISR(tareaprincipal_manejador, &xHigherPriorityTaskWoken); //Cambio de contexto tarea prioritaria
+   
 }
 
 
@@ -189,6 +250,15 @@ void actuadores(void){
     lecturas.temperatura = 0;
     lecturas.presencia_caudal = 0;
     lecturas.humedad_suelo = 0;
+    
+    typedef struct {        //Prototipo de Estructura de Umbrales de variables
+    float umb_hum_suelo;
+    float umb_hum_interna_mayor;
+    float umb_temp;
+    int umb_hora_luz_on;
+    int umb_hora_luz_off;
+    } stru_umbrales_var_t;
+    array_accion_actuadores[pos_actuadores_tamaño]
     */
 
     //DEBUG ----- Prueba Fertilización sin activar  riego
@@ -196,7 +266,6 @@ void actuadores(void){
     //array_accion_actuadores[pos_array_FERTILIZAR] = true;
     //actuar_fertilizar(array_accion_actuadores[pos_array_FERTILIZAR]);
     //DEBUG
-
 
     //DEBUG ----- Prueba Fertilización activando riego
     //ESP_LOGW(TAG_DEBUG, "Ingresando a actuar_fertilizar Riego esperado.");
@@ -207,17 +276,25 @@ void actuadores(void){
 
     //------- MODO AUTOMÁTICO -----------//
     if (modo_Auto_ON == true){    
-        if(lecturas.humedad_suelo < umbrales_actuadores.umb_hum_suelo){
-           
-        }
+        
         //Si la humedad interna es mayo que la externaa
         if((lecturas.humedad_int - lecturas.humedad_ext) > umbrales_actuadores.umb_hum_interna_mayor){
-
+            actuar_ventilar(true);
         }
+
         //Si la temperatura es mayor al umbral
         if(lecturas.temperatura > umbrales_actuadores.umb_temp){
-
+            actuar_ventilar(true);
+        }else{
+            //actuar_ventilar(false);
         }
+       
+        if(lecturas.humedad_suelo < umbrales_actuadores.umb_hum_suelo){
+            actuar_regar(true);
+        }else{
+            //actuar_regar(false);
+        }
+
     }
     
     /* -----Cambio de estados de actuadores en base a Array array_accion_actuadores
@@ -230,14 +307,6 @@ void actuadores(void){
 }
 
 
-//TODO:
-//-Return o goto en error en flag error i2c
-//-Factorizar casos de error para mejor visualización y manejo
-//-Logs de lecturas SHT, factorizar hacia dentro de funciòno SHT,no dejar en sensores()
-//-- Obtebnción de hora del sistema y Lectura de sensores cada N segundos
-
-
-
 void tiempo_sistema(){
     time(&hora_sistema_sensores); //Captura de hora POSIX del sistema
     setenv("TZ", "COT-5", 1); // Set zona horaria
@@ -248,21 +317,28 @@ void tiempo_sistema(){
     ESP_LOGI(TAG, "Hora Sistema: %s   -SECS- :  %d", strftime_buf, sistema_segundos);
 }
 
-stru_lec_sensores_t  sensores(void){
+void sensores(void){
     esp_err_t ret = ESP_OK;
 
+    //Reset de estructura con valores leídos
     lecturas.humedad_ext = 0;
     lecturas.humedad_int = 0;
     lecturas.temperatura = 0;
     lecturas.presencia_caudal = 0;
     lecturas.humedad_suelo = 0;
 
+    //------------------ LECTURA Caudal en línea de riego ------------------
+    lecturas.presencia_caudal=gpio_get_level(PIN_SENSOR_CAUDAL); //Lectura de sensor presencia de caudal
+
     //------------------ LECTURA sensor humedad suelo ------------------
     humedad_suelo_lectura(&lectura_adc);
 
     //Verificacion de valor correcot humedad del suelo
-    if (lectura_adc >= 0.2 && lectura_adc <= 3.3 ){
-        lectura_adc = lecturas.humedad_suelo;      
+    if (lectura_adc >= 5 && lectura_adc <= 100 ){
+        lectura_adc = lecturas.humedad_suelo;  
+        ESP_LOGW(TAG_SENSORES, "Lectura ADC() - Se asigna valor %i (Pendiente Escala)  ", lectura_adc);    
+        //Debería ser un entero dado que ya se habla de un valor de humedad
+        //ESP_LOGW(TAG_SENSORES, "Lectura ADC() - Se asigna valor %f (Pendiente Escala)  ", lecturas.humedad_suelo);    
     }else{
         ESP_LOGW(TAG, "Error Lectura ADC - Humedad del suelo fuera de rango -");
         lecturas.humedad_suelo = -0.1;
@@ -277,6 +353,7 @@ stru_lec_sensores_t  sensores(void){
         //Pendiente "Return" o "goto" tras error
     }
 
+    //------------------ LECTURA SHT30 I2C, humedad y Temperatura ------------------
     ret = i2c_read_sht(&lecturas_sht30);
     if(ret == ESP_OK){
         lecturas.humedad_int = lecturas_sht30.humedad;
@@ -286,20 +363,22 @@ stru_lec_sensores_t  sensores(void){
         ESP_LOGE(TAG_SENSORES, "Error al leer valores SHT30 "); 
         lecturas.humedad_int = -0.1;
         lecturas.temperatura = -0.1;
-        return lecturas;
     }
      
-
-    //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:%f - Hum_int: %f - Temp: %f - Caudal: %s", lecturas.humedad_ext, lecturas.humedad_int, lecturas.temperatura, lecturas.presencia_caudal ? "true" : "false"  );
+    ESP_LOGW(TAG, "LECTURA SENSORES ----> Hum_ext:off - Hum_int: %f - Temp: %f - Caudal: %s -Hum_suelo: %i", lecturas.humedad_int, lecturas.temperatura, lecturas.presencia_caudal ? "SI" : "NO", lectura_adc);
     //ESP_LOGI(TAG, "LECTURA SENSORES ----> Hum_ext:off - Hum_int: %f - Temp: %f - Hum-Suelo: %f  Caudal: %s", lecturas.humedad_int, lecturas.temperatura, lecturas.humedad_suelo, lecturas.presencia_caudal ? "true" : "false"  );
     //ESP_LOGI(TAG_ACTUADORES, "ACCION ACTUADORES ----> Iluminar:%s - Ventilar:%s - Regar:%s, Fertilizar:%s", array_accion_actuadores[pos_array_ILUMINAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF", array_accion_actuadores[pos_array_FERTILIZAR] ? "ON" : "OFF");
-    
-    return lecturas;
 }
 
 
-esp_err_t humedad_suelo_lectura(float *lectura_adc){
+esp_err_t humedad_suelo_lectura(int *lectura_adc){
     
+
+    const float Vmin = 0.2;  // Por ejemplo, 1.0 V
+    const float Vmax = 3.0;  // Por ejemplo, 2.8 V
+    float lec_adc_digital;
+    float float_adc_100;
+
     static const char *TAG_ADC = "ADC_smol";
 
     if (lectura_adc == NULL) {
@@ -310,30 +389,51 @@ esp_err_t humedad_suelo_lectura(float *lectura_adc){
     //Ojo con el manejo de errores en esta sección y la posterior consulta al ADC.
     ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_7, &adc_raw[0]));
 
-    *lectura_adc = (adc_raw[0] * 3.3) / 1024;
-    ESP_LOGI(TAG_ADC, "--- LECTURA ADC_%d Channel[%d]   Raw Data: %d   Voltage:%f", ADC_UNIT_1 + 1, ADC_CHANNEL_7, adc_raw[0], *lectura_adc );
+    lec_adc_digital = (adc_raw[0] * 3.3) / 1024;
+    float_adc_100 = ((lec_adc_digital - Vmin) / (Vmax - Vmin)) * 100.0;
+    *lectura_adc = (int)float_adc_100;
+    ESP_LOGI(TAG_ADC, "--- LECTURA ADC %d_Channel[%d]   Raw Data: %d   Voltage:%i", ADC_UNIT_1 + 1, ADC_CHANNEL_7, adc_raw[0], *lectura_adc );
     
     return ESP_OK;
 }
 
+/* Función que activa e inactiva VENTILACIÓN en base a variable;
+Se actualiza estado de array actuadores;
+Notifica por TaskNotifyGive a tarea de pulso de ventilación
+*/
 void actuar_ventilar(bool estado_act){
-
-    gpio_set_level(PIN_VENTILAR, estado_act ? 0 : 1);
+    if(estado_act){ // Activación de pulso de ventilación en tarea ventilar
+    array_accion_actuadores[pos_array_VENTILAR]=true;
+    xTaskNotifyGive(tareaventilar_manejador); 
+    }else{          //Desactivación de pin directamente sin espera de finalización de tarea
+        array_accion_actuadores[pos_array_VENTILAR]=false;
+        gpio_set_level(PIN_VENTILAR, 0);
+    }
     ESP_LOGI(TAG_ACTUADORES, "Ventilar: %s", estado_act ? "ON" : "OFF");
-
 }
+
+/* Función que activa e inactiva RIEGO en base a variable;
+ Se actualiza estado de array actuadores;
+  Notifica por TaskNotifyGive a tarea de pulso de riego
+*/
+void actuar_regar(bool estado_act){
+    if(estado_act){
+        array_accion_actuadores[pos_array_REGAR]=true;
+        xTaskNotifyGive(tarearegar_manejador); //Cambio de contexto tarea prioritaria
+    }else{
+        array_accion_actuadores[pos_array_REGAR]=false;
+        gpio_set_level(PIN_REGAR, 0);
+    }
+    ESP_LOGI(TAG_ACTUADORES, "Regar: %s", estado_act ? "ON" : "OFF");
+}
+
+
+
 void actuar_iluminar(bool estado_act){
-    
-    gpio_set_level(PIN_ILUMINAR, estado_act ? 0 : 1);
-    ESP_LOGI(TAG_ACTUADORES, "Iluminar: %s", estado_act ? "ON" : "OFF");
-
+    gpio_set_level(PIN_ILUMINAR, estado_act ? 1 : 0);
+    ESP_LOGI(TAG_ACTUADORES, "Iluminar: %s", array_accion_actuadores[pos_array_ILUMINAR] ? "ON" : "OFF");
 }
-void actuar_regar(){
-        
-    gpio_set_level(PIN_REGAR, array_accion_actuadores[pos_array_REGAR] ? 1 : 0);
-    ESP_LOGI(TAG_ACTUADORES, "Regar: %s", array_accion_actuadores[pos_array_REGAR] ? "ON" : "OFF");
 
-}
 void actuar_fertilizar(){
     
     ESP_LOGI(TAG_ACTUADORES, "actuar_fertilizar(bool)....");

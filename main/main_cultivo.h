@@ -20,6 +20,10 @@
 #define LIM_HUM_SUELO_MAX 0
 #define LIM_HUM_SUELO_MIN 0
 
+//Defines de tiempo de acción
+#define TIEMPO_VENTILAR_ON 20  //Define de segundos ventilacion, podria ser variable
+#define TIEMPO_REGAR_ON 22  //Define de segundos riego, podria ser variable
+
 //Variables globales
 
 extern bool flag_error_i2c; //Variable para detección de erro en comunicación I2C con el sensor SHT30
@@ -29,7 +33,7 @@ void timer_funcion(TimerHandle_t);
 //Funciones de actuadores
 void actuar_iluminar(bool); //Activador Iluminación
 void actuar_ventilar(bool); //Activador Ventilación
-void actuar_regar();    //Funcion actuadora bomba de riego Pin27
+void actuar_regar(bool);    //Funcion actuadora bomba de riego Pin27
 void actuar_fertilizar(); //Funcion actuadora bomba fertilizante Pin32
 void chipinfo(void); //Información del chip
 
@@ -38,9 +42,11 @@ void actuadores(void);
 
 void tiempo_sistema();//Cálculo de hora del sistema
 
-esp_err_t humedad_suelo_lectura(float *hum_suelo); //Lectura de la humedad del suelo
+esp_err_t humedad_suelo_lectura(int *hum_suelo); //Lectura de la humedad del suelo
 void set_umbrales_actuadores(void); //Set de umbrales param el inicio y tras solicitud del usuario por GUI
 esp_err_t  adc_init(void); // función para iniacializar el ADC
+
+void sensores(void);
 
 
 
@@ -72,6 +78,6 @@ typedef enum {
 
 
 
-stru_lec_sensores_t  sensores(void);
+
 
 #endif 
