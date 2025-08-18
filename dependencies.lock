@@ -1,0 +1,81 @@
+dependencies:
+  espp/base_component:
+    component_hash: 5979a81ac2629505342013bd9c9d8fcaae9d09b411fe9f88dcbdd93b5c325359
+    dependencies:
+    - name: espp/logger
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.20
+  espp/cli:
+    component_hash: 2b13a35fa82cd1d9a6ad00b323e05c7c5acfb2450f79649b20f184a38928fc29
+    dependencies:
+    - name: espp/logger
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.20
+  espp/format:
+    component_hash: 67ca1433d83f4df8af56094630fb4907f1ceed4a80726aaa59860fbe1a39263a
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.20
+  espp/logger:
+    component_hash: 0e768020cfbc83fe23c6cba2c830430e5b6a28c21b3706284c40288473538a74
+    dependencies:
+    - name: espp/format
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.20
+  espp/wifi:
+    component_hash: bf3a4b2bae1eb7b27a94a11ed827e636bf293db0f6d6fcee6daad5287acf235a
+    dependencies:
+    - name: espp/base_component
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0'
+    - name: espp/cli
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0'
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.20
+  idf:
+    source:
+      type: idf
+    version: 5.4.1
+direct_dependencies:
+- espp/wifi
+- idf
+manifest_hash: 89a7c12c334b4338569abf92d14be24a5c56c331a02c56a0de409837435d2a62
+target: esp32
+version: 2.0.0

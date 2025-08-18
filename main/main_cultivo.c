@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <stdlib.h>
+#include <string.h>
 #include "esp_log.h"
 #include "esp_system.h"
 #include "driver/gpio.h"
@@ -18,15 +20,17 @@
 
 //#include "i2c_types.h"
 #include "driver/i2c_master.h"
-#include "sensor_sht.h"
+#include "nvs_flash.h"
 #include "hal/adc_types.h"
 
+//Cabezeras propias desarrolladas
+#include "miwifi.h"
+#include "sensor_sht.h"
 
 
-#include <stdlib.h>
-#include <string.h>
 #include "esp_adc/adc_oneshot.h"
 #include "soc/soc_caps.h"
+
 
 //--------------- Definición de variables
 
@@ -47,6 +51,7 @@ bool estado_ventilar = false;
 bool estado_luz;
 
 bool flag_error_i2c = false; //Error en inicialización recursos i2c_master_init()
+bool flag_tiempo_sync = false; 
 
 stru_lec_sensores_t lecturas;  //Estructura general que almacena los valores leídos
 stru_umbrales_var_t umbrales_actuadores;
@@ -60,16 +65,23 @@ int lectura_adc; // Variable para almacenar lectura de función del ADC
 TaskHandle_t tareaprincipal_manejador;
 TaskHandle_t tarearegar_manejador;
 TaskHandle_t tareaventilar_manejador;
+TaskHandle_t tareawifi_manejador;
 
-time_t hora_sistema_sensores; // variable para almacenar la hora del sistema
+time_t hora_sistema; // variable para almacenar la hora del sistema
 char strftime_buf[64]; //Conversión de hora de sistema
 struct tm timeinfo; //Hora del sistema estructura de tiempo
+
+time_t hora_sistema_ajustado_col; // variable para almacenar la hora del sistema ajustada a Colombia
+struct tm tiempo_ajustado; //Hora del sistema estructura de tiempo
+struct tm timeinfo_utc; //Hora del sistema estructura de tiempo UTC
+char buf_ajustado[64];
+char buf[64];
 
 
 //-- Configuraciones iniciales
 void config_inicial(void){
 
-    ESP_LOGI(TAG, "Inicializando sistema ESP32...");
+    ESP_LOGI(TAG, "Inicializando config_inicial ESP32...");
 
     //Configuración de pines
     gpio_set_direction(PIN_VENTILAR, GPIO_MODE_OUTPUT); //P25
@@ -86,6 +98,15 @@ void config_inicial(void){
     } 
 
     adc_init();
+
+
+    ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+
+
 
     //Set Umbrales para iniciar operaciones
     set_umbrales_actuadores();
@@ -181,6 +202,21 @@ void tarea_regar(){
     }
 }
 
+void tarea_wifi(){
+    ESP_LOGI(TAG, "Tarea WiFi iniciada");
+    wifi_init_sta();
+
+    ESP_LOGW(TAG, "Tarea WiFi SUSPENDIDA INDEFINIDA -----");
+    uint8_t contador = 0;
+    while(1){
+        vTaskDelay(1000 / portTICK_PERIOD_MS); // Espera de 1 segundo
+        contador++;
+        if (contador >= 10  && !flag_tiempo_sync) {
+            sntp_tiempo_sincro();
+            contador = 0;
+        }
+    }
+}
 
 void tarea_principal(){
     u_int8_t count = 0;
@@ -188,7 +224,9 @@ void tarea_principal(){
     while(1){
         //Espera de notificación de timer
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        tiempo_sistema();
+        if(flag_tiempo_sync){
+            tiempo_sistema(); //Actualiza hora del sistema
+        }else printf("Tiempo no sincronizado, no se imprime\n");
         count ++;
         if(count == 3){
             printf("\n\n\nCONTEO 3 EN TAREA PRINCIPAL, SE EJECUTA LÓGICA\n");
@@ -213,9 +251,10 @@ void app_main(void)
     xTaskCreate(tarea_principal, "main_task", 4096, NULL, 4, &tareaprincipal_manejador);
     xTaskCreate(tarea_ventilar, "ventilar_task", 2048, NULL, 2, &tareaventilar_manejador);
     xTaskCreate(tarea_regar, "regar_task", 2048, NULL, 2, &tarearegar_manejador);
+    xTaskCreate(tarea_wifi, "wifi_task", 4096, NULL, 2, &tareawifi_manejador);
     
 
-    timer_manejador = xTimerCreate("Timer_Smol", 5*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
+    timer_manejador = xTimerCreate("Timer_Smol", 10*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
     
     if (timer_manejador == NULL)
     {
@@ -234,7 +273,7 @@ void app_main(void)
 
 void timer_funcion(TimerHandle_t pxTimer){
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    printf("\n\n\n\nTIMER notify from ISR -5s-\n");
+    printf("\n\nTIMER notify from ISR -10s-\n");
     vTaskNotifyGiveFromISR(tareaprincipal_manejador, &xHigherPriorityTaskWoken); //Cambio de contexto tarea prioritaria
    
 }
@@ -308,13 +347,26 @@ void actuadores(void){
 
 
 void tiempo_sistema(){
-    time(&hora_sistema_sensores); //Captura de hora POSIX del sistema
-    setenv("TZ", "COT-5", 1); // Set zona horaria
-    tzset();
-    localtime_r(&hora_sistema_sensores, &timeinfo);
+    time(&hora_sistema); //Captura de hora POSIX del sistema
+    localtime_r(&hora_sistema, &timeinfo);
     int sistema_segundos = timeinfo.tm_sec; //Tiempo del sistema en segundos
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); //print tiempo  a cadena de texto 
     ESP_LOGI(TAG, "Hora Sistema: %s   -SECS- :  %d", strftime_buf, sistema_segundos);
+
+    struct tm timeinfo_utc;
+    gmtime_r(&hora_sistema, &timeinfo_utc);
+    strftime(buf, sizeof(buf), "%c", &timeinfo_utc);
+    ESP_LOGI(TAG, "Hora UTC: %s", buf);
+
+    if(flag_tiempo_sync){
+        time_t hora_sistema_ajustado_col = hora_sistema - (5 * 3600);
+        gmtime_r(&hora_sistema_ajustado_col, &tiempo_ajustado);
+        strftime(buf_ajustado, sizeof(buf_ajustado), "%c", &tiempo_ajustado);
+        ESP_LOGE(TAG, "Hora Colombia (ajustada manual): %s", buf_ajustado);
+    }
+    
+
+
 }
 
 void sensores(void){

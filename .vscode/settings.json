@@ -26,6 +26,10 @@
     "string.h": "c",
     "stdlib.h": "c",
     "i2c_master.h": "c",
-    "esp_chip_info.h": "c"
+    "esp_chip_info.h": "c",
+    "miwifi.h": "c",
+    "freertos.h": "c",
+    "nvs_flash.h": "c",
+    "chrono": "c"
   }
 }

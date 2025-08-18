@@ -1,0 +1,4 @@
+CMake Warning at managed_components/espp__cli/CMakeLists.txt:6 (message):
+  C++ exceptions are disabled, CLI is disabled
+
+

@@ -1,0 +1,22 @@
+dependencies:
+  espp/base_component: '>=1.0'
+  espp/cli: '>=1.0'
+  idf:
+    version: '>=5.0'
+description: WiFi component for ESP-IDF
+documentation: https://esp-cpp.github.io/espp/wifi/index.html
+license: MIT
+maintainers:
+- William Emfinger <waemfinger@gmail.com>
+repository: git://github.com/esp-cpp/espp.git
+repository_info:
+  commit_sha: 999f57477b7a250efa6463ebd8bc0a502e0cd6bf
+  path: components/wifi
+tags:
+- cpp
+- Component
+- WiFi
+- Station
+- Access-Point
+url: https://github.com/esp-cpp/espp/tree/main/components/wifi
+version: 1.0.20

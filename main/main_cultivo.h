@@ -2,6 +2,7 @@
 #define MAIN_CULTIVO_H
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 //Definicion Pines
 #define PIN_VENTILAR 25 
@@ -27,6 +28,7 @@
 //Variables globales
 
 extern bool flag_error_i2c; //Variable para detección de erro en comunicación I2C con el sensor SHT30
+extern bool flag_tiempo_sync; //Flag activa una vez se haya sincronizado el tiempo con SNTP
 
 void timer_funcion(TimerHandle_t);
 

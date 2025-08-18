@@ -1,0 +1,124 @@
+sp_image: seZ�
+сoffset 0x10000
+[0;32mI (397) boot: Disabling RNG early entropy source...[0m
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:6276
+load:0x40078000,len:15748
+load:0x40080400,len:4
+ho 8 tail 4 room 4
+load:0x40080404,len:3860
+entry 0x4008063c
+[0;32mI (31) boot: ESP-IDF v5.4.1 2nd stage bootloader[0m
+[0;32mI (31) boot: compile time Aug 17 2025 15:29:55[0m
+[0;32mI (31) boot: Multicore bootloader[0m
+[0;32mI (32) boot: chip revision: v3.1[0m
+[0;32mI (35) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (39) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (43) boot.esp32: SPI Flash Size : 2MB[0m
+[0;32mI (46) boot: Enabling RNG early entropy source...[0m
+[0;32mI (51) boot: Partition Table:[0m
+[0;32mI (53) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (60) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (66) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (73) boot:  2 factory          factory app      00 00 00010000 00100000[0m
+[0;32mI (79) boot: End of partition table[0m
+[0;32mI (82) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=1bcdch (113884) map[0m
+[0;32mI (129) esp_image: segment 1: paddr=0002bd04 vaddr=3ff80000 size=0001ch (    28) load[0m
+[0;32mI (129) esp_image: segment 2: paddr=0002bd28 vaddr=3ffb0000 size=03f70h ( 16240) load[0m
+[0;32mI (139) esp_image: segment 3: paddr=0002fca0 vaddr=40080000 size=00378h (   888) load[0m
+[0;32mI (141) esp_image: segment 4: paddr=00030020 vaddr=400d0020 size=8e44ch (582732) map[0m
+[0;32mI (347) esp_image: segment 5: paddr=000be474 vaddr=40080378 size=17e78h ( 97912) load[0m
+[0;32mI (397) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (397) boot: Disabling RNG early entropy source...[0m
+I (407) cpu_start: Multicore app
+[0;32mI (415) cpu_start: Pro cpu start user code[0m
+[0;32mI (415) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (416) app_init: Application information:[0m
+[0;32mI (416) app_init: Project name:     cultivo_smg[0m
+[0;32mI (420) app_init: App version:      7980637-dirty[0m
+[0;32mI (424) app_init: Compile time:     Aug 17 2025 15:29:34[0m
+[0;32mI (429) app_init: ELF file SHA256:  d561eeae5...[0m
+[0;32mI (434) app_init: ESP-IDF:          v5.4.1[0m
+[0;32mI (437) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (441) efuse_init: Max chip rev:     v3.99 [0m
+[0;32mI (445) efuse_init: Chip rev:         v3.1[0m
+[0;32mI (449) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (456) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM[0m
+[0;32mI (460) heap_init: At 3FFB89D0 len 00027630 (157 KiB): DRAM[0m
+[0;32mI (466) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM[0m
+[0;32mI (471) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM[0m
+[0;32mI (477) heap_init: At 400981F0 len 00007E10 (31 KiB): IRAM[0m
+[0;32mI (483) spi_flash: detected chip: generic[0m
+[0;32mI (486) spi_flash: flash io: dio[0m
+[0;33mW (489) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.[0m
+[0;32mI (502) main_task: Started on CPU0[0m
+[0;32mI (512) main_task: Calling app_main()[0m
+--- MODULO ASISTENTE DE CULTIVO ---
+-Iniciando placa ESP32...-
+
+
+[0;32mI (512) SM_CULTIVO: Inicializando config_inicial ESP32...[0m
+[0;32mI (512) I2C_SHT30_smol: Inicializando recursos I2C...[0m
+[0;32mI (522) I2C_SHT30_smol: I2C - Inicio OK (Bus y SHT30)[0m
+[0;33mW (542) TAG: HARDCODE UMBRALES DE VARIABLES[0m
+[0;33mW (542) TAG: Umbrales ----> Umb.HumSuelo = 30.000000  Umb.Temp=35.500000  Umb.Humedad=30.000000 HrON:18 HrOFF:3[0m
+[0;33mW (552) task_ventilar: TAREA VENTILAR BLOQUEADA---- 20s o Notify[0m
+[0;33mW (552) task_regar: TAREA REGAR BLOQUEADA---- 20s o Notify[0m
+[0;32mI (562) SM_CULTIVO: Tarea WiFi iniciada[0m
+[0;32mI (562) wifi_smol: ----- Inicializando WiFi en modo STATION[0m
+[0;32mI (582) wifi:wifi driver task: 3ffc4f74, prio:23, stack:6656, core=0[0m
+[0;32mI (592) wifi:wifi firmware version: 79fa3f41ba[0m
+[0;32mI (592) wifi:wifi certification version: v7.0[0m
+[0;32mI (592) wifi:config NVS flash: enabled[0m
+[0;32mI (592) wifi:config nano formatting: disabled[0m
+[0;32mI (592) wifi:Init data frame dynamic rx buffer num: 32[0m
+[0;32mI (602) wifi:Init static rx mgmt buffer num: 5[0m
+[0;32mI (602) wifi:Init management short buffer num: 32[0m
+[0;32mI (612) wifi:Init dynamic tx buffer num: 32[0m
+[0;32mI (612) wifi:Init static rx buffer size: 1600[0m
+[0;32mI (622) wifi:Init static rx buffer num: 10[0m
+[0;32mI (622) wifi:Init dynamic rx buffer num: 32[0m
+[0;32mI (622) wifi_init: rx ba win: 6[0m
+[0;32mI (632) wifi_init: accept mbox: 6[0m
+[0;32mI (632) wifi_init: tcpip mbox: 32[0m
+[0;32mI (632) wifi_init: udp mbox: 6[0m
+[0;32mI (642) wifi_init: tcp mbox: 6[0m
+[0;32mI (642) wifi_init: tcp tx win: 5760[0m
+[0;32mI (642) wifi_init: tcp rx win: 5760[0m
+[0;32mI (642) wifi_init: tcp mss: 1440[0m
+[0;32mI (652) wifi_init: WiFi IRAM OP enabled[0m
+[0;32mI (652) wifi_init: WiFi RX IRAM OP enabled[0m
+[0;32mI (662) phy_init: phy_version 4860,6b7a6e5,Feb  6 2025,14:47:07[0m
+[0;32mI (742) phy_init: Saving new calibration data due to checksum failure or outdated calibration data, mode(0)[0m
+[0;32mI (802) wifi:mode : sta (a0:b7:65:27:30:80)[0m
+[0;32mI (802) wifi:enable tsf[0m
+[0;32mI (802) wifi_smol: ----- WiFi iniciado en modo STATION[0m
+[0;32mI (852) wifi:new:<7,0>, old:<1,0>, ap:<255,255>, sta:<7,0>, prof:1, snd_ch_cfg:0x0[0m
+[0;32mI (852) wifi:state: init -> auth (0xb0)[0m
+[0;32mI (862) wifi:state: auth -> assoc (0x0)[0m
+[0;32mI (872) wifi:state: assoc -> run (0x10)[0m
+[0;32mI (882) wifi:connected with Herrera Molina, aid = 20, channel 7, BW20, bssid = 94:02:6b:56:de:cc[0m
+[0;32mI (882) wifi:security: WPA2-PSK, phy: bgn, rssi: -71[0m
+[0;32mI (892) wifi:pm start, type: 1[0m
+
+[0;32mI (892) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us[0m
+[0;32mI (952) wifi:AP's beacon interval = 102400 us, DTIM period = 1[0m
+[0;32mI (5032) esp_netif_handlers: sta ip: 192.168.1.25, mask: 255.255.255.0, gw: 192.168.1.1[0m
+[0;32mI (5032) wifi_smol: OK IP ASIGNADA:192.168.1.25[0m
+[0;33mW (5032) wifi_smol: ----- connected to ap SSID:Herrera Molina password:1112787000[0m
+[0;32mI (5032) wifi_smol: ----- Configurando SNTP[0m
+[1;31mE (5042) esp_netif_sntp: sntp_init_api(61): Tried to configure SNTP server from DHCP, while disabled. Please enable CONFIG_LWIP_DHCP_GET_NTP_SRV[0m
+[1;31mE (5052) esp_netif_sntp: esp_netif_sntp_init(119): Failed initialize SNTP service[0m
+[0;33mW (5062) wifi_smol: Error al sincronizar SNTP, timeout 10s[0m
+[0;33mW (5062) SM_CULTIVO: Tarea WiFi SUSPENDIDA INDEFINIDA -----[0m
+
+
+
+
+TIMER notify from ISR -5s-
+[0;32mI (5572) SM_CULTIVO: Hora Sistema: Thu Jan  1 05:00:05 1970   -SECS- :  5[0m

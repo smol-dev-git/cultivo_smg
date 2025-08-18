@@ -81,4 +81,6 @@ C:/Users/santy/esp/cultivo_smg/build/esp-idf/perfmon/libperfmon.a
 C:/Users/santy/esp/cultivo_smg/build/esp-idf/rt/librt.a
 C:/Users/santy/esp/cultivo_smg/build/esp-idf/spiffs/libspiffs.a
 C:/Users/santy/esp/cultivo_smg/build/esp-idf/wifi_provisioning/libwifi_provisioning.a
+C:/Users/santy/esp/cultivo_smg/build/esp-idf/espp__logger/libespp__logger.a
+C:/Users/santy/esp/cultivo_smg/build/esp-idf/espp__cli/libespp__cli.a
 C:/Users/santy/esp/cultivo_smg/build/esp-idf/main/libmain.a
