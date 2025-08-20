@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "cultivo_smg",
-    "project_version":    "7980637-dirty",
+    "project_version":    "ce8afac-dirty",
     "project_path":       "C:/Users/santy/esp/cultivo_smg",
     "idf_path":           "C:/Users/santy/esp/v5.4.1/esp-idf",
     "build_dir":          "C:/Users/santy/esp/cultivo_smg/build",

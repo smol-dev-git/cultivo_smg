@@ -48,6 +48,19 @@ esp_err_t humedad_suelo_lectura(int *hum_suelo); //Lectura de la humedad del sue
 void set_umbrales_actuadores(void); //Set de umbrales param el inicio y tras solicitud del usuario por GUI
 esp_err_t  adc_init(void); // función para iniacializar el ADC
 
+//Función para definir por hardocde 3 fertilizacione
+void hardcode_fertilizaciones(); 
+//Función para verificar si hay fertilizaciones programadas y si se han realizado
+void exec_fertilizaciones() ; 
+
+//Construcción de lógica de fertilizaciones
+void exec_fertilizaciones2(); 
+
+//Función para verificar si hay guardados en NVS fertilizaciones
+//Con los Keys "ferti_0", "ferti_1", "ferti_2"; si son 0 no hay valor almacenado
+void buscar_fertilizaciones_nvs();
+
+
 void sensores(void);
 
 

@@ -42,6 +42,8 @@ static const char *TAG_SENSORES = "SENSO-";
 
 static TimerHandle_t timer_manejador;
 
+
+//Variables principales del invernadero
 int humedad_ambiente_int = 0;
 int humedad_ambiente_ext = 0;
 float temperatura = 0;
@@ -50,13 +52,16 @@ bool estado_caudal = false;
 bool estado_ventilar = false;
 bool estado_luz;
 
+//Flag error
 bool flag_error_i2c = false; //Error en inicialización recursos i2c_master_init()
 bool flag_tiempo_sync = false; 
 
+//Variables de operación del sistema
 stru_lec_sensores_t lecturas;  //Estructura general que almacena los valores leídos
 stru_umbrales_var_t umbrales_actuadores;
 bool array_accion_actuadores[pos_actuadores_tamaño] = {false}; //Array [0,0,0,0] que contiene los estados de los actuadores
 sht30_data_t lecturas_sht30;
+time_t fertilizaciones[3] = {0, 0, 0}; //Array con las fertilizaciones programadas, 0 indica sin programar
 
 static adc_oneshot_unit_handle_t adc1_handle; //Manejador del canal ADC
 static int adc_raw[10];
@@ -99,17 +104,17 @@ void config_inicial(void){
 
     adc_init();
 
-
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
 
-
-
     //Set Umbrales para iniciar operaciones
     set_umbrales_actuadores();
+
+    // Búsqueda de valores programados de fertilizaciones en NVS 
+    buscar_fertilizaciones_nvs();
 }
 
 //Inicialización del ADC
@@ -162,19 +167,20 @@ void tarea_ventilar(){
     while(1){
     
         //Notificacion con espera de tiempo
-        ESP_LOGW("task_ventilar", "TAREA VENTILAR BLOQUEADA---- 20s o Notify");
-        BaseType_t xResult = xTaskNotifyWait(0, ULONG_MAX, &valor_notificacion, pdMS_TO_TICKS( TIEMPO_VENTILAR_ON * 1000));
-        //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        ESP_LOGW("task_ventilar", "TAREA VENTILAR BLOQUEADA");
+        //BaseType_t xResult = xTaskNotifyWait(0, ULONG_MAX, &valor_notificacion, pdMS_TO_TICKS( TIEMPO_VENTILAR_ON * 1000));
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        //Paso de bloqueo por notificación, es decir, se quizo activar venitlar por notificación
-         if (xResult == pdTRUE) {
+        //Paso de bloqueo por notificación, es decir, se quizo activar ventilar por notificación
+         //if (xResult == pdTRUE) {
+         if (array_accion_actuadores[pos_array_VENTILAR] == true) {
             gpio_set_level(PIN_VENTILAR, array_accion_actuadores[pos_array_VENTILAR] ? 1 : 0);
-            ESP_LOGW("task_ventilar", "ACTIVACION TAREA_Ventilar VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
+            ESP_LOGW("task_ventilar", "ACTIVACION Ventilacion  VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
 
          }else{ //Paso de bloqueo por expiración de tiempo
-            array_accion_actuadores[pos_array_VENTILAR] = false;
+            
             gpio_set_level(PIN_VENTILAR, array_accion_actuadores[pos_array_VENTILAR] ? 1 : 0);
-            ESP_LOGW("task_ventilar", "TIEMPO EXPIRADO EN TAREA_Ventilar VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
+            ESP_LOGW("task_ventilar", "DESACTIVAR Ventilacion  VENTILACION: %s", array_accion_actuadores[pos_array_VENTILAR] ? "ON" : "OFF");
         }
         
     }
@@ -229,14 +235,21 @@ void tarea_principal(){
         }else printf("Tiempo no sincronizado, no se imprime\n");
         count ++;
         if(count == 3){
-            printf("\n\n\nCONTEO 3 EN TAREA PRINCIPAL, SE EJECUTA LÓGICA\n");
+            printf("\n\nCONTEO 3 EN TAREA PRINCIPAL, SE EJECUTA LÓGICA\n");
             count = 0;
             sensores();
             actuadores();
-            printf("\n\n\nUNLOCK TAREA  VENTILAR \n");
+            printf("UNLOCK Prueba TAREA  VENTILAR \n");
             xTaskNotifyGive(tareaventilar_manejador); //Cambio de contexto tarea prioritaria
         }
-        //vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+        //Hardocde de almacenado de fertilizaciones, Ya se han asignado fertilizaiones a la NVS
+        /*
+        if(count == 10 ){
+             //hardcode_fertilizaciones();
+             count = 0
+        }*/
+        
     }
 }
 
@@ -254,7 +267,7 @@ void app_main(void)
     xTaskCreate(tarea_wifi, "wifi_task", 4096, NULL, 2, &tareawifi_manejador);
     
 
-    timer_manejador = xTimerCreate("Timer_Smol", 10*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
+    timer_manejador = xTimerCreate("Timer_Smol", 5*configTICK_RATE_HZ, pdTRUE, (void *) 1, timer_funcion);
     
     if (timer_manejador == NULL)
     {
@@ -273,12 +286,10 @@ void app_main(void)
 
 void timer_funcion(TimerHandle_t pxTimer){
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    printf("\n\nTIMER notify from ISR -10s-\n");
+    printf("\n\nTIMER notify from ISR -5s-\n");
     vTaskNotifyGiveFromISR(tareaprincipal_manejador, &xHigherPriorityTaskWoken); //Cambio de contexto tarea prioritaria
    
 }
-
-
 
 //-- Función que verifica el llamado a la acción y ejecuta para los actuadores y salidas del sistema
 void actuadores(void){
@@ -347,16 +358,13 @@ void actuadores(void){
 
 
 void tiempo_sistema(){
+
     time(&hora_sistema); //Captura de hora POSIX del sistema
     localtime_r(&hora_sistema, &timeinfo);
     int sistema_segundos = timeinfo.tm_sec; //Tiempo del sistema en segundos
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); //print tiempo  a cadena de texto 
     ESP_LOGI(TAG, "Hora Sistema: %s   -SECS- :  %d", strftime_buf, sistema_segundos);
 
-    struct tm timeinfo_utc;
-    gmtime_r(&hora_sistema, &timeinfo_utc);
-    strftime(buf, sizeof(buf), "%c", &timeinfo_utc);
-    ESP_LOGI(TAG, "Hora UTC: %s", buf);
 
     if(flag_tiempo_sync){
         time_t hora_sistema_ajustado_col = hora_sistema - (5 * 3600);
@@ -451,7 +459,7 @@ esp_err_t humedad_suelo_lectura(int *lectura_adc){
 
 /* Función que activa e inactiva VENTILACIÓN en base a variable;
 Se actualiza estado de array actuadores;
-Notifica por TaskNotifyGive a tarea de pulso de ventilación
+Notifica por TaskNotifyGive a tarea de ventilación.
 */
 void actuar_ventilar(bool estado_act){
     if(estado_act){ // Activación de pulso de ventilación en tarea ventilar
@@ -480,7 +488,6 @@ void actuar_regar(bool estado_act){
 }
 
 
-
 void actuar_iluminar(bool estado_act){
     gpio_set_level(PIN_ILUMINAR, estado_act ? 1 : 0);
     ESP_LOGI(TAG_ACTUADORES, "Iluminar: %s", array_accion_actuadores[pos_array_ILUMINAR] ? "ON" : "OFF");
@@ -504,6 +511,134 @@ void actuar_fertilizar(){
     gpio_set_level(PIN_FERTILIZAR, array_accion_actuadores[pos_array_FERTILIZAR] ? 1 : 0);
     ESP_LOGI(TAG_ACTUADORES, "Fertilizar: %s", array_accion_actuadores[pos_array_FERTILIZAR] ? "ON" : "OFF");
 }
+
+
+void hardcode_fertilizaciones() {
+    time_t now;
+    time(&now);
+    fertilizaciones[0] = now + 300; // 1 día después
+    fertilizaciones[1] = now + 1 * 3600; // 2 días después
+    fertilizaciones[2] = now + 2 * 3600; // 3 días después
+    
+
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("fertiliz", NVS_READWRITE, &nvs_handle);
+    if (err == ESP_OK) {
+        for (int i = 0; i < 3; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "ferti_%d", i);
+            nvs_set_i64(nvs_handle, key, fertilizaciones[i]);
+        }
+        nvs_commit(nvs_handle);
+        nvs_close(nvs_handle);
+    } else {
+        ESP_LOGE(TAG, "Error abriendo NVS para fertilizaciones");
+    }
+}
+
+void exec_fertilizaciones() {
+    time_t now;
+    time(&now);
+    for (int i = 0; i < 3; i++) {
+        if (fertilizaciones[i] != 0 && fertilizaciones[i] <= now) {
+            ESP_LOGI(TAG, "Ejecutando fertilización #%d", i+1);
+            //actuar_fertilizar();
+            fertilizaciones[i] = 0; // Marca como ejecutada
+        }else{
+            ESP_LOGI(TAG, "Fertilización(#%d) = 0", i+1);
+        }
+    }
+}
+
+void exec_fertilizaciones2() {
+    time_t now;
+    time(&now);
+    struct tm tm_now, tm_prog;
+
+    localtime_r(&now, &tm_now);
+
+    for (int i = 0; i < 3; i++) {
+        if (fertilizaciones[i] != 0) {
+            localtime_r(&fertilizaciones[i], &tm_prog);
+
+             // Comprobar si la fertilización está vencida (más de 15 días)
+            double dias_diferencia = difftime(now, fertilizaciones[i]) / (60 * 60 * 24);
+            if (dias_diferencia > 15.0) {
+                ESP_LOGE(TAG, "Fertilización #%d vencida (más de 15 días). Se elimina.", i+1);
+                fertilizaciones[i] = 0;
+                // Actualiza la NVS
+                nvs_handle_t nvs_handle;
+                if (nvs_open("fertiliz", NVS_READWRITE, &nvs_handle) == ESP_OK) {
+                    char key[16];
+                    snprintf(key, sizeof(key), "ferti_%d", i);
+                    nvs_set_i64(nvs_handle, key, 0);
+                    nvs_commit(nvs_handle);
+                    nvs_close(nvs_handle);
+                }
+                continue;
+            }
+
+            if (tm_now.tm_year == tm_prog.tm_year &&
+                tm_now.tm_mon  == tm_prog.tm_mon  &&
+                tm_now.tm_mday == tm_prog.tm_mday &&
+                tm_now.tm_hour == tm_prog.tm_hour &&
+                tm_now.tm_min  == tm_prog.tm_min) {
+
+                ESP_LOGI(TAG, "Ejecutando fertilización #%d", i+1);
+                actuar_fertilizar();
+                fertilizaciones[i] = 0; // Marca como ejecutada
+
+                // Opcional: Actualiza la NVS
+                nvs_handle_t nvs_handle;
+                if (nvs_open("fertiliz", NVS_READWRITE, &nvs_handle) == ESP_OK) {
+                    char key[16];
+                    snprintf(key, sizeof(key), "ferti_%d", i);
+                    nvs_set_i64(nvs_handle, key, 0);
+                    nvs_commit(nvs_handle);
+                    nvs_close(nvs_handle);
+                }
+            }
+        }
+    }
+}
+
+
+void buscar_fertilizaciones_nvs() {
+    ESP_LOGI(TAG, "Accediendo a NVS-fertili para consulta de fetilizaciones programadas");
+    nvs_handle_t nvs_handle;
+    char buf[64];
+    struct tm tm_info;
+    esp_err_t err = nvs_open("fertiliz", NVS_READONLY, &nvs_handle);
+    if (err == ESP_OK) {
+        for (int i = 0; i < 3; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "ferti_%d", i);
+            int64_t valor = 0;
+            if (nvs_get_i64(nvs_handle, key, &valor) == ESP_OK) {
+                fertilizaciones[i] = (time_t)valor;
+            } else {
+                fertilizaciones[i] = 0;
+            }
+        }
+        nvs_close(nvs_handle);
+
+        for (int i = 0; i < 3; i++) {
+            if (fertilizaciones[i] != 0) {
+                localtime_r(&fertilizaciones[i], &tm_info);
+                strftime(buf, sizeof(buf), "%c", &tm_info);
+                printf( "Fertilización #%d programada para: %s \n", i+1, buf);
+            }else printf( "Fertilización #%d no agendada; valor = 0 %s \n", i+1, buf);
+        }
+  
+    } else {
+        ESP_LOGE(TAG, "Error accediendo a NVS-fertiliz para fertilizaciones; sin valores detectados");
+        for (int i = 0; i < 3; i++) {
+            fertilizaciones[i] = 0;
+        }
+    }
+}
+
+
 
 void chipinfo(void){
      /* Print chip information */
